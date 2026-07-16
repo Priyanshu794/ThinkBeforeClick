@@ -1,0 +1,9 @@
+backend/.env
+backend/thinkbeforeclick.db
+backend/app/ml/dataset/*
+!backend/app/ml/dataset/.gitkeep
+backend/app/ml/model/*
+!backend/app/ml/model/.gitkeep
+__pycache__/
+*.pyc
+node_modules/

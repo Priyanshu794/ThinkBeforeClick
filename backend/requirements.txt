@@ -1,0 +1,9 @@
+fastapi
+uvicorn
+pydantic
+sqlalchemy
+scikit-learn
+joblib
+python-whois
+requests
+python-dotenv
