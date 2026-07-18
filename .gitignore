@@ -1,10 +1,32 @@
+# --- Custom Project Files ---
 backend/.env
 backend/thinkbeforeclick.db
 backend/app/ml/dataset/*
 !backend/app/ml/dataset/.gitkeep
 backend/app/ml/model/*
 !backend/app/ml/model/.gitkeep
-__pycache__/
-*.pyc
+
+# --- Python & Virtual Environments ---
+**/__pycache__/
+**/*.pyc
+**/*.pyo
+**/*.pyd
+.venv/
+venv/
+env/
+ENV/
+
+# --- Web & Node ---
 node_modules/
-.venv
+*.log
+npm-debug.log*
+
+# --- IDEs & Code Editors ---
+.vscode/
+.idea/
+*.swp
+
+# --- System specific ---
+Thumbs.db
+Desktop.ini
+.DS_Store

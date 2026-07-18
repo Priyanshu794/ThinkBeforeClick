@@ -202,3 +202,34 @@ local one that changes mid-build.
   analysis via popup.
 - Full rebuild from scratch — no code carried over from the earlier hackathon prototype.
 - Build order: **Backend API → Web App (deployed) → Browser Extension.**
+
+
+
+STACKS 
+Backend (built — Phases 1 & 2 done)
+
+Language: Python
+Web framework: FastAPI — chosen over Flask for built-in request validation, async support, and auto-generated docs (/docs)
+Server: Uvicorn — the ASGI server that actually runs the FastAPI app
+Validation/schemas: Pydantic — defines and validates the shape of request/response data (AnalyzeRequest, AnalyzeResponse)
+Database: SQLite — lightweight, file-based, no separate DB server needed
+ORM: SQLAlchemy — Python layer that talks to SQLite via Scan and Report table models
+Detection logic so far: Python's built-in re (regex) module for the rule-based layer — no ML library needed yet for Phase 2
+
+Backend (planned, not yet built)
+
+ML/NLP (Phase 3): scikit-learn (TF-IDF vectorizer + Logistic Regression or Naive Bayes), joblib to save/load the trained model
+Threat-intel (Phase 4): Google Safe Browsing API, python-whois for domain-age lookups
+
+Web app (Phase 6 — not yet built)
+
+Plain HTML/CSS/JavaScript — no frontend framework (no React/Vue), calling the backend via fetch/JS
+
+Deployment (Phase 7 — not yet built)
+
+Render — hosting for backend + database (and likely the static frontend too)
+GitHub — source control / repo hosting
+
+Browser extension (Phases 8–9 — not yet built)
+
+Manifest V3 (Chrome extension standard) — vanilla JS content script, background service worker, and popup UI (no framework)
