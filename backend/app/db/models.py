@@ -20,6 +20,8 @@ class Scan(Base):
     ml_score = Column(Float, nullable=True)          # ML phishing-probability score 0-100 (Phase 3)
     threat_label = Column(String, nullable=True)
     threat_score = Column(Integer, nullable=True)
+    final_risk_label = Column(String, nullable=True)
+    final_risk_score = Column(Integer, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
 

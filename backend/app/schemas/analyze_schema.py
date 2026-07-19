@@ -22,6 +22,10 @@ class AnalyzeResponse(BaseModel):
        threat_label: str
        threat_score: int
        threat_flags: List[str]
+       final_risk_label: str
+       final_risk_score: int
+       explanation: List[str]
+       recommendation: str
        message_received: Optional[str] = None
        url_received: Optional[str] = None
        note: str
