@@ -1,4 +1,9 @@
 # Phase 2: regex/keyword-based message + URL rule detection
+# Updated: added keyword/TLD coverage for delivery-scam and portal-impersonation
+# patterns found during real-world test cases (see PROJECT_STATE.md "Known backend
+# detection gaps" — Cases 1 and 2 in that section). Additive only — nothing removed,
+# nothing re-weighted, per the "don't re-tune without a failing test case" rule; these
+# ARE the new failing test cases driving this specific addition.
 import re
 from typing import List, Tuple
 
@@ -15,6 +20,19 @@ SUSPICIOUS_KEYWORDS = [
     "confirm", "password", "login", "bank", "otp", "refund", "gift card",
     "scholarship", "cash", "reward", "claim now", "immediately",
     "restricted", "blocked", "unusual activity", "security alert",
+
+    # --- Added: delivery/courier scam vocabulary (Case 1, real-world test) ---
+    # Extremely common on WhatsApp/SMS — "your parcel couldn't be delivered,
+    # update your details" — a phrasing style the original list didn't cover
+    # at all.
+    "parcel", "courier", "delivery attempt", "could not be delivered",
+    "reschedule delivery", "customs fee", "track your shipment",
+    "return to sender", "shipping fee", "redelivery",
+
+    # --- Added: portal/results impersonation vocabulary (Case 2, real-world test) ---
+    # "Login to check your marks", "provisional certificate", "portal closes" —
+    # mundane institutional-notice phrasing that scam messages mimic closely.
+    "provisional certificate", "portal closes", "results portal",
 ]
 
 
@@ -89,11 +107,19 @@ KNOWN_SHORTENERS = [
 SUSPICIOUS_TLDS = [
     ".xyz", ".top", ".click", ".loan", ".work", ".gq", ".tk", ".ml",
     ".cf", ".ga", ".zip", ".mov", ".rest",
+    # --- Added: .info (Case 1 real-world test used a .info delivery-scam URL) ---
+    # .info is a legitimate TLD in some genuine use, so this is a lighter-weight
+    # signal than .xyz/.tk/etc — still contributes to the score, not an
+    # automatic override.
+    ".info",
 ]
 
 SUSPICIOUS_URL_KEYWORDS = [
     "login", "verify", "secure", "account", "update", "confirm",
     "banking", "signin", "password", "webscr", "free", "bonus",
+
+    # --- Added: delivery/results URL vocabulary ---
+    "track", "parcel", "delivery", "shipment", "results",
 ]
 
 
