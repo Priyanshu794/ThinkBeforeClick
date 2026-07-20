@@ -5,7 +5,7 @@ backend/app/ml/dataset/*
 !backend/app/ml/dataset/.gitkeep
 backend/app/ml/model/*
 !backend/app/ml/model/.gitkeep
-
+!backend/app/ml/model/*.joblib
 # --- Python & Virtual Environments ---
 **/__pycache__/
 **/*.pyc
