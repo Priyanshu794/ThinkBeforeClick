@@ -25,7 +25,7 @@ class AnalyzeResponse(BaseModel):
        final_risk_label: str
        final_risk_score: int
        explanation: List[str]
-       recommendation: str
+       recommendation: List[str]
        message_received: Optional[str] = None
        url_received: Optional[str] = None
        note: str

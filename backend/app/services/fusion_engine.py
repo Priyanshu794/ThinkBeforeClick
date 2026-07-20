@@ -1,26 +1,43 @@
 # Phase 5: combines rule_engine + ml_engine + threat_intel into one
 # risk score, label, explanation, and recommendation
+#
+# Design (finalized in project discussion, see PROJECT_STATE.md):
+#   - Weights when a URL is present: rule 30% / ML 40% / threat-intel 30%
+#   - When no URL is given, threat-intel's 30% is redistributed proportionally
+#     across rule/ML (kept at their 30:40 ratio -> ~42.86% / ~57.14%)
+#   - Threat-intel raw score caps at 60 (Safe Browsing 40 + WHOIS 20 max),
+#     normalized against that real ceiling, not 100.
+#   - ONE override: a confirmed Google Safe Browsing match is independently-
+#     verified ground truth, not a probabilistic guess like rule/ML — it
+#     forces final_label = "High Risk" with a score floor of 90, regardless
+#     of the blended score. No other overrides (e.g. no rule+ML agreement
+#     override). Added after Case 6 testing showed a confirmed-malicious
+#     URL landing as "Safe" under the pure blended score alone.
+#   - Thresholds on the final 0-100 score (when the override doesn't fire):
+#     >=70 High Risk, >=35 Suspicious, else Safe
+#   - Explanation: top 4 flags pooled from whichever layers actually fired,
+#     ordered threat-intel first (external ground truth), then ML, then rule.
+#     Override reason (if fired) is listed first of all. Empty if final
+#     label is Safe.
+#   - Recommendation: a short canned bullet list keyed only off the final
+#     label. Empty if final label is Safe.
 from typing import Dict, List
 
-# Layer weights — how much each layer contributes to the final fused score
-# WHEN ALL THREE LAYERS HAVE A SIGNAL. Threat-intel gets the highest weight
-# since it's independently-verified external ground truth.
-WEIGHT_RULE = 0.25
-WEIGHT_ML = 0.35
-WEIGHT_THREAT = 0.40
+WEIGHT_RULE = 0.30
+WEIGHT_ML = 0.40
+WEIGHT_THREAT = 0.30
 
 RULE_SCORE_CAP = 100
-THREAT_SCORE_CAP = 60
+THREAT_SCORE_CAP = 60  # Safe Browsing (40) + WHOIS (20) max possible raw score
 
-HIGH_RISK_THRESHOLD = 65
+HIGH_RISK_THRESHOLD = 70
 SUSPICIOUS_THRESHOLD = 35
 
-# Rule+ML agreement override: if both independently agree this looks like
-# phishing, that's strong enough to force High Risk even without external
-# confirmation (e.g. a brand-new phishing domain Safe Browsing hasn't
-# indexed yet). Optimizes for recall per the Phase 3 decision.
-ML_AGREEMENT_THRESHOLD = 80    # ML confidence %
-RULE_AGREEMENT_THRESHOLD = 30  # rule score
+# How many flags to surface in the explanation panel, max.
+EXPLANATION_FLAG_LIMIT = 4
+
+# Safe Browsing confirmed-match override: score floor when it fires.
+SAFE_BROWSING_OVERRIDE_FLOOR = 90
 
 
 def _normalize(score: float, cap: float) -> float:
@@ -43,9 +60,9 @@ def run_fusion_engine(
     ml_norm = _normalize(ml_score, 100)
     threat_norm = _normalize(threat_score, THREAT_SCORE_CAP)
 
-    # If there was no URL to check at all, threat-intel has no signal to
-    # contribute — redistribute its weight proportionally across rule/ML
-    # instead of letting it silently drag the ceiling down to 60.
+    # No URL submitted at all -> threat-intel has no signal. Redistribute its
+    # weight proportionally across rule/ML instead of zeroing it out, so a
+    # message-only submission isn't artificially capped.
     if threat_label == "Not checked":
         remaining = WEIGHT_RULE + WEIGHT_ML
         w_rule = WEIGHT_RULE / remaining
@@ -59,24 +76,12 @@ def run_fusion_engine(
         )
 
     safe_browsing_hit = any("Safe Browsing flagged" in f for f in threat_flags)
-    rule_ml_agree = (
-        ml_label == "Phishing"
-        and ml_score >= ML_AGREEMENT_THRESHOLD
-        and rule_score >= RULE_AGREEMENT_THRESHOLD
-    )
 
     override_note = None
     if safe_browsing_hit:
         final_label = "High Risk"
-        final_score = max(round(weighted_score), 90)
+        final_score = max(round(weighted_score), SAFE_BROWSING_OVERRIDE_FLOOR)
         override_note = "Confirmed by Google Safe Browsing — this overrides the blended score."
-    elif rule_ml_agree:
-        final_label = "High Risk"
-        final_score = max(round(weighted_score), 70)
-        override_note = (
-            "Rule-based and ML layers both independently flagged this as phishing "
-            "with high confidence — this overrides the blended score."
-        )
     else:
         final_score = round(weighted_score)
         if final_score >= HIGH_RISK_THRESHOLD:
@@ -87,10 +92,9 @@ def run_fusion_engine(
             final_label = "Safe"
 
     explanation = _build_explanation(
-        rule_score, rule_flags, ml_score, ml_label, ml_flags,
-        threat_score, threat_label, threat_flags, override_note,
+        final_label, rule_flags, ml_flags, threat_flags, override_note
     )
-    recommendation = _build_recommendation(final_label, safe_browsing_hit)
+    recommendation = _build_recommendation(final_label)
 
     return {
         "final_risk_label": final_label,
@@ -101,52 +105,42 @@ def run_fusion_engine(
 
 
 def _build_explanation(
-    rule_score, rule_flags, ml_score, ml_label, ml_flags,
-    threat_score, threat_label, threat_flags, override_note,
+    final_label: str,
+    rule_flags: List[str],
+    ml_flags: List[str],
+    threat_flags: List[str],
+    override_note: str = None,
 ) -> List[str]:
-    lines: List[str] = []
+    # Safe verdicts show no explanation panel at all (matches the "Safe" UI
+    # design: just a checkmark, no bullet list).
+    if final_label == "Safe":
+        return []
 
+    lines: List[str] = []
     if override_note:
         lines.append(override_note)
 
-    if rule_flags:
-        lines.append(f"Rule-based layer (score {rule_score}): " + "; ".join(rule_flags))
-    else:
-        lines.append(f"Rule-based layer (score {rule_score}): no suspicious patterns found")
-
-    lines.append(f"ML/NLP layer: classified as '{ml_label}' (confidence {ml_score})")
-    if ml_flags:
-        lines.append("ML layer notes: " + "; ".join(ml_flags))
-
-    if threat_flags:
-        lines.append(f"Threat-intel layer (score {threat_score}): " + "; ".join(threat_flags))
-    else:
-        lines.append(f"Threat-intel layer: {threat_label}")
-
+    # Pool remaining flags from layers that actually fired, ordered
+    # threat-intel first (independently-verified external signal), then ML,
+    # then rule. Cap total lines (including the override note) at the limit.
+    pooled = list(threat_flags) + list(ml_flags) + list(rule_flags)
+    remaining_slots = EXPLANATION_FLAG_LIMIT - len(lines)
+    lines.extend(pooled[:remaining_slots])
     return lines
 
 
-def _build_recommendation(final_label: str, safe_browsing_hit: bool) -> str:
+def _build_recommendation(final_label: str) -> List[str]:
     if final_label == "High Risk":
-        if safe_browsing_hit:
-            return (
-                "Do not click this link or respond to this message. It has been "
-                "confirmed malicious by Google Safe Browsing. Delete it and report "
-                "it if it came through a school or work account."
-            )
-        return (
-            "Do not click any links, reply, or share personal/financial information. "
-            "Multiple detection layers flagged this as highly suspicious — treat it "
-            "as phishing."
-        )
+        return [
+            "Do not click any links in this message.",
+            "Do not share personal, financial, or login details.",
+            "Report this message and delete it.",
+        ]
     elif final_label == "Suspicious":
-        return (
-            "Proceed with caution. Don't click links or share sensitive information "
-            "until you've verified this through an official, separate channel "
-            "(e.g. calling the organization directly using a number you look up yourself)."
-        )
+        return [
+            "Verify the sender through a separate, trusted channel.",
+            "Avoid entering any personal details until confirmed.",
+            "Consider reporting this if you're unsure.",
+        ]
     else:
-        return (
-            "No strong red flags found. Still, always verify unexpected requests for "
-            "money, login details, or personal information through an official channel."
-        )
+        return []

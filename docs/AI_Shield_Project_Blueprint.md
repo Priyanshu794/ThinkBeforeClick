@@ -23,6 +23,9 @@ layers** and combines them into one explainable risk score:
 
 A **fusion engine** combines all three into one score, one risk label (Safe / Suspicious /
 High Risk), a breakdown of which layer flagged what, and a plain-language recommendation.
+**This fusion engine is now built and verified** (rule 30% / ML 40% / threat-intel 30%,
+with one override for a confirmed Safe Browsing match — see Section 3 and
+`PROJECT_STATE.md` for the full design and test results).
 
 No accounts. No login. The tool is fully anonymous and stateless from the student's point of
 view — nothing personal is ever stored. The only data retained is the scanned message/URL
@@ -37,12 +40,18 @@ used later to retrain and improve the ML model.
 
 - Student visits the site, pastes a suspicious message and/or URL into the analyzer.
 - Backend runs the full 3-layer pipeline and returns a risk score, label, per-layer breakdown,
-  detected red flags, and a recommended action.
+  detected red flags, and a recommended action (now a short bullet list, not a single
+  sentence).
 - Student can click **"Report this message"** if they believe the result is wrong or want to
   flag a new phishing pattern — this feeds the retraining dataset.
 - No login, no history tied to a person. Fully stateless per visit.
 - Includes a short **"How it works"** page explaining the three layers in plain language, for
   transparency and trust.
+- **Full visual/interaction design confirmed**, not yet built: a matrix-rain intro with a
+  4-second glitch effect, a skull-reveal transition, a 2-second mouth-opening animation
+  revealing a persistent input dialog, a processing state, and a themed verdict card (red
+  for High Risk, amber for Suspicious, green for Safe). See `PROJECT_STATE.md`'s "Frontend
+  plan" section for the complete stage-by-stage spec.
 
 ### 2.2 Browser Extension
 
@@ -63,8 +72,8 @@ It works in **two tiers**:
 **Tier 2 — Active, on-demand deep check**
 - Clicking the flagged warning icon, or the extension icon itself, opens the full popup —
   the same analyzer UI as the web app.
-- This triggers the **full pipeline** (rules + ML + threat-intel) against the backend API,
-  giving the complete explainable breakdown and the report option.
+- This triggers the **full pipeline** (rules + ML + threat-intel + fusion engine) against
+  the backend API, giving the complete explainable breakdown and the report option.
 - This is also how a student checks anything the passive scanner can't reach: a forwarded
   SMS, a message read aloud to them, a screenshot's text pasted in, WhatsApp mobile, etc.
 
@@ -80,13 +89,19 @@ or the student actively asks — the same pattern real browser security tools us
 
 Backend is built first since both the web app and the extension consume the same API.
 
-| Phase | Focus | Key Deliverables |
-|---|---|---|
-| **Phase 1** | Backend foundation | FastAPI project structure, `/analyze` endpoint, request validation, upgraded rule engine (regex + obfuscation handling), SQLite database for scan/report storage |
-| **Phase 2** | ML layer | Collect + clean public phishing/spam datasets, train TF-IDF + Logistic Regression classifier, evaluate (precision/recall), wrap as a callable service |
-| **Phase 3** | Threat-intel + fusion engine | Google Safe Browsing API integration, WHOIS domain-age check, fusion engine combining all 3 layers with weighted scoring + explanation generator |
-| **Phase 4** | Web app + deployment | Rebuilt frontend calling the new API, deploy backend + frontend + database to Render, end-to-end testing with real sample messages |
-| **Phase 5** | Browser extension | Manifest V3 extension: passive content-script scanner (Tier 1) + popup deep-check UI (Tier 2), pointed at the deployed backend |
+| Phase | Focus | Key Deliverables | Status |
+|---|---|---|---|
+| **Phase 1** | Backend foundation | FastAPI project structure, `/analyze` endpoint, request validation, upgraded rule engine (regex + obfuscation handling), SQLite database for scan/report storage | ✅ Done |
+| **Phase 2** | ML layer | Collect + clean public phishing/spam datasets, train TF-IDF + Logistic Regression classifier, evaluate (precision/recall), wrap as a callable service | ✅ Done — verified with real predictions (92–96% confidence on obvious phishing, 2–6% on safe messages). Model/dataset gitignored, local-only |
+| **Phase 3** | Threat-intel + fusion engine | Google Safe Browsing API integration, WHOIS domain-age check, fusion engine combining all 3 layers with weighted scoring + explanation generator | ✅ Done — final design: rule 30% / ML 40% / threat-intel 30%, one Safe Browsing override (score floor 90), thresholds ≥70 High Risk / ≥35 Suspicious, explanation capped at 4 flags, recommendation as a bullet list. Verified against 11 real test cases (see `PROJECT_STATE.md`) |
+| **Phase 4** | Web app + deployment | Rebuilt frontend calling the new API, deploy backend + frontend + database to Render, end-to-end testing with real sample messages | Not started — visual design confirmed, ready to build |
+| **Phase 5** | Browser extension | Manifest V3 extension: passive content-script scanner (Tier 1) + popup deep-check UI (Tier 2), pointed at the deployed backend | Not started — comes after web app per build order |
+
+> **Note on phase numbering:** this table uses a compressed 5-phase view. The project's
+> actual working phase tracker (`phases.md`) uses a more granular 9-phase breakdown, where
+> what this table calls "Phase 3" (threat-intel + fusion) corresponds to `phases.md`'s
+> Phase 4 (Threat-Intelligence) + Phase 5 (Fusion Engine), both of which are complete. Refer
+> to `phases.md` and `PROJECT_STATE.md` for the authoritative, detailed phase status.
 
 **Build order confirmed:** Backend API → Web App (deployed) → Browser Extension.
 Building the extension last means it targets a stable, already-tested, live API instead of a
@@ -121,6 +136,9 @@ local one that changes mid-build.
                                    ▼
                         ┌─────────────────────┐
                         │   Fusion / Risk Engine │
+                        │ rule 30% / ML 40% /    │
+                        │ threat-intel 30%,      │
+                        │ + Safe Browsing override│
                         └──────────┬────────────┘
                                    │
               ┌────────────────────┼────────────────────┐
@@ -135,8 +153,8 @@ local one that changes mid-build.
                                    ▼
                         ┌─────────────────────┐
                         │  Combined Risk Score  │
-                        │  + Explanation +      │
-                        │  Recommendation       │
+                        │  + Explanation (top 4)│
+                        │  + Recommendation list│
                         └──────────┬────────────┘
                                    ▼
                         ┌─────────────────────┐
@@ -176,7 +194,7 @@ local one that changes mid-build.
                                                 │
                                                 ▼
                                   Popup opens → full pipeline runs
-                                  (rules + ML + threat-intel via backend API)
+                                  (rules + ML + threat-intel + fusion via backend API)
                                                 │
                                                 ▼
                                   Full explainable result + report option
@@ -202,34 +220,45 @@ local one that changes mid-build.
   analysis via popup.
 - Full rebuild from scratch — no code carried over from the earlier hackathon prototype.
 - Build order: **Backend API → Web App (deployed) → Browser Extension.**
+- Fusion engine weighting/thresholds/override are finalized against real, documented test
+  cases (11 cases, including a confirmed bug fix — see `PROJECT_STATE.md`). Do not re-tune
+  without a new, specific failing test case driving it.
 
 
 
-STACKS 
-Backend (built — Phases 1 & 2 done)
+STACKS
+
+Backend (built — Phases 1, 2, 3 done, per this file's compressed numbering; equivalently
+Phases 1–5 done per `phases.md`'s granular numbering)
 
 Language: Python
 Web framework: FastAPI — chosen over Flask for built-in request validation, async support, and auto-generated docs (/docs)
 Server: Uvicorn — the ASGI server that actually runs the FastAPI app
-Validation/schemas: Pydantic — defines and validates the shape of request/response data (AnalyzeRequest, AnalyzeResponse)
+Validation/schemas: Pydantic — defines and validates the shape of request/response data (AnalyzeRequest, AnalyzeResponse). `recommendation` is `List[str]`, not a single string
 Database: SQLite — lightweight, file-based, no separate DB server needed
 ORM: SQLAlchemy — Python layer that talks to SQLite via Scan and Report table models
-Detection logic so far: Python's built-in re (regex) module for the rule-based layer — no ML library needed yet for Phase 2
+Detection logic:
+  - Rule-based layer: Python's built-in `re` (regex) module, obfuscation-aware
+  - ML/NLP layer: scikit-learn (TF-IDF vectorizer + Logistic Regression), `joblib` to
+    save/load — **model/vectorizer/dataset are gitignored, local-only**, verified working
+    with real predictions. scikit-learn pinned to **1.7.2** in `requirements.txt` — do not
+    upgrade without re-testing the full dependency chain (1.8.0 broke other dependencies)
+  - Threat-intel layer: Google Safe Browsing API v4, `python-whois` for domain-age lookups
+    — requires a real `SAFE_BROWSING_API_KEY` in a local, gitignored `.env`
+  - Fusion engine: plain weighted average (rule 30% / ML 40% / threat-intel 30%, with
+    dynamic reweighting when no URL is given) + one override for confirmed Safe Browsing
+    matches (score floor 90) + explanation generator (top 4 flags, threat-intel > ML > rule
+    priority) + recommendation generator (canned bullet list per final label)
 
-Backend (planned, not yet built)
+Web app (Phase 6 in `phases.md` — not yet built, visual design confirmed)
 
-ML/NLP (Phase 3): scikit-learn (TF-IDF vectorizer + Logistic Regression or Naive Bayes), joblib to save/load the trained model
-Threat-intel (Phase 4): Google Safe Browsing API, python-whois for domain-age lookups
+Plain HTML/CSS/JavaScript — no frontend framework (no React/Vue), calling the backend via fetch/JS. Design: matrix-rain background, glitch-effect intro, skull-reveal + mouth-opening animation, persistent input dialog, themed verdict cards (High Risk/Suspicious/Safe) — full spec in `PROJECT_STATE.md`
 
-Web app (Phase 6 — not yet built)
-
-Plain HTML/CSS/JavaScript — no frontend framework (no React/Vue), calling the backend via fetch/JS
-
-Deployment (Phase 7 — not yet built)
+Deployment (Phase 7 in `phases.md` — not yet built)
 
 Render — hosting for backend + database (and likely the static frontend too)
 GitHub — source control / repo hosting
 
-Browser extension (Phases 8–9 — not yet built)
+Browser extension (Phases 8–9 in `phases.md` — not yet built)
 
 Manifest V3 (Chrome extension standard) — vanilla JS content script, background service worker, and popup UI (no framework)
