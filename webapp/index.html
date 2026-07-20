@@ -1,1 +1,70 @@
-<!-- Phase 6: analyzer page — message + URL input, results panel -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ThinkBeforeClick</title>
+<link rel="stylesheet" href="static/css/style.css">
+</head>
+<body>
+
+  <!-- Continuous background matrix rain, runs behind every stage -->
+  <canvas id="rain-canvas"></canvas>
+
+  <!-- Full-screen noise/scanline overlay, present through every stage -->
+  <div class="noise-overlay"></div>
+
+  <main id="app">
+
+    <!-- STAGE 1: Intro -->
+    <section id="stage-intro" class="stage active">
+      <div class="intro-box" id="intro-box">
+        <span id="intro-text">THINK BEFORE CLICK</span>
+      </div>
+      <p class="intro-subtext">Checking for AI Phishing...</p>
+    </section>
+
+    <!-- STAGE 2 + 3: Terminal panel glitches in -> input dialog -> waits indefinitely -->
+    <section id="stage-terminal" class="stage">
+      <div class="think-dialog" id="think-dialog">
+        <div class="dialog-title">// THREAT ANALYZER</div>
+
+        <label for="url-input">SCAN URL</label>
+        <input type="text" id="url-input" placeholder="https://..." autocomplete="off">
+
+        <label for="msg-input">PASTE MSG</label>
+        <textarea id="msg-input" rows="3" placeholder="Paste a suspicious message..."></textarea>
+
+        <button id="think-btn" type="button">THINK</button>
+        <p class="think-status" id="think-status"></p>
+      </div>
+    </section>
+
+    <!-- STAGE 5: Verdict -->
+    <section id="stage-verdict" class="stage">
+      <div class="verdict-card" id="verdict-card">
+        <div class="verdict-icon" id="verdict-icon"></div>
+        <div class="verdict-score" id="verdict-score"></div>
+        <div class="verdict-label" id="verdict-label"></div>
+
+        <div class="verdict-details" id="verdict-details">
+          <div class="verdict-col">
+            <h3 id="verdict-why-heading">Why Risky</h3>
+            <ul id="verdict-why-list"></ul>
+          </div>
+          <div class="verdict-col">
+            <h3>Recommendation</h3>
+            <ul id="verdict-reco-list"></ul>
+          </div>
+        </div>
+
+        <button class="scan-again-btn" id="scan-again-btn" type="button">SCAN AGAIN</button>
+      </div>
+    </section>
+
+  </main>
+
+  <script src="static/js/vendor/gsap.min.js"></script>
+  <script src="static/js/analyzer.js"></script>
+</body>
+</html>

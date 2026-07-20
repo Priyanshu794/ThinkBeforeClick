@@ -1,1 +1,327 @@
-/* Phase 6: analyzer + results panel styling */
+/* ==========================================================================
+   ThinkBeforeClick — Phase 6 Frontend
+   ========================================================================== */
+
+:root {
+  /* --- Single source of truth for matrix-green, used everywhere green appears --- */
+  --matrix-green: #39FF14;
+  --matrix-green-dim: #1e8c0c;
+  --bg-black: #000000;
+
+  /* --- Verdict theme colors --- */
+  --high-risk-color: #ff2b2b;
+  --high-risk-glow: rgba(255, 43, 43, 0.55);
+  --suspicious-color: #ffb300;
+  --suspicious-glow: rgba(255, 179, 0, 0.5);
+  --safe-color: var(--matrix-green);
+  --safe-glow: rgba(57, 255, 20, 0.5);
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  background: var(--bg-black);
+  overflow: hidden;
+  font-family: 'Courier New', 'Consolas', monospace;
+}
+
+/* --------------------------------------------------------------------------
+   Background matrix rain — one continuous canvas behind every stage
+   -------------------------------------------------------------------------- */
+#rain-canvas {
+  position: fixed;
+  top: 0; left: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: 0;
+  background: var(--bg-black);
+}
+
+/* --------------------------------------------------------------------------
+   Full-screen noise/scanline overlay — present through every stage
+   -------------------------------------------------------------------------- */
+.noise-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  pointer-events: none;
+  background: repeating-linear-gradient(
+    0deg,
+    rgba(255,255,255,0.025) 0px,
+    rgba(255,255,255,0.025) 1px,
+    transparent 1px,
+    transparent 3px
+  );
+  opacity: 0.5;
+  mix-blend-mode: overlay;
+}
+
+/* --------------------------------------------------------------------------
+   App shell / stage switching
+   -------------------------------------------------------------------------- */
+#app {
+  position: relative;
+  z-index: 1;
+  width: 100vw;
+  height: 100vh;
+}
+
+.stage {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.4s ease;
+}
+
+.stage.active {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* --------------------------------------------------------------------------
+   STAGE 1 — Intro
+   -------------------------------------------------------------------------- */
+.intro-box {
+  border: 3px solid var(--matrix-green);
+  border-radius: 14px;
+  padding: 28px 56px;
+  box-shadow: 0 0 12px var(--matrix-green), 0 0 30px var(--matrix-green) inset;
+  background: rgba(0, 20, 0, 0.35);
+}
+
+#intro-text {
+  font-size: clamp(1.6rem, 5vw, 3rem);
+  font-weight: bold;
+  letter-spacing: 0.12em;
+  color: var(--matrix-green);
+  text-shadow: 0 0 8px var(--matrix-green), 0 0 20px var(--matrix-green);
+  white-space: nowrap;
+}
+
+.intro-subtext {
+  margin-top: 22px;
+  color: var(--matrix-green-dim);
+  font-size: clamp(0.9rem, 2vw, 1.2rem);
+  letter-spacing: 0.05em;
+}
+
+/* --------------------------------------------------------------------------
+   STAGE 2/3 — Terminal panel + input dialog (no image assets required)
+   -------------------------------------------------------------------------- */
+.think-dialog {
+  position: relative;
+  width: min(90vw, 380px);
+  transform: scale(0.85);
+  opacity: 0;
+  pointer-events: none;
+
+  background: rgba(0, 12, 0, 0.85);
+  border: 1px solid var(--matrix-green);
+  border-radius: 8px;
+  padding: 20px 22px 24px;
+  box-shadow: 0 0 20px rgba(57,255,20,0.45), 0 0 50px rgba(57,255,20,0.15) inset;
+}
+
+.think-dialog.visible {
+  pointer-events: auto;
+}
+
+.dialog-title {
+  color: var(--matrix-green);
+  font-size: 0.8rem;
+  letter-spacing: 0.1em;
+  margin-bottom: 14px;
+  opacity: 0.8;
+}
+
+.think-dialog label {
+  display: block;
+  color: var(--matrix-green);
+  font-size: 0.7rem;
+  letter-spacing: 0.08em;
+  margin-bottom: 4px;
+  margin-top: 12px;
+}
+
+.think-dialog label:first-of-type { margin-top: 0; }
+
+.think-dialog input,
+.think-dialog textarea {
+  width: 100%;
+  background: rgba(0, 0, 0, 0.6);
+  border: 1px solid var(--matrix-green-dim);
+  color: var(--matrix-green);
+  font-family: inherit;
+  font-size: 0.8rem;
+  padding: 6px 8px;
+  border-radius: 3px;
+  resize: none;
+}
+
+.think-dialog input:focus,
+.think-dialog textarea:focus {
+  outline: none;
+  border-color: var(--matrix-green);
+  box-shadow: 0 0 6px rgba(57,255,20,0.6);
+}
+
+#think-btn {
+  margin-top: 14px;
+  width: 100%;
+  background: transparent;
+  border: 1px solid var(--matrix-green);
+  color: var(--matrix-green);
+  padding: 8px;
+  font-family: inherit;
+  font-weight: bold;
+  letter-spacing: 0.1em;
+  border-radius: 3px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+#think-btn:hover { background: var(--matrix-green); color: #000; }
+#think-btn:disabled { opacity: 0.5; cursor: wait; }
+
+.think-status {
+  margin: 8px 0 0;
+  font-size: 0.72rem;
+  color: var(--matrix-green-dim);
+  min-height: 1em;
+  text-align: center;
+}
+
+/* --------------------------------------------------------------------------
+   STAGE 5 — Verdict card
+   -------------------------------------------------------------------------- */
+.verdict-card {
+  --theme-color: var(--safe-color);
+  --theme-glow: var(--safe-glow);
+
+  position: relative;
+  width: min(90vw, 620px);
+  padding: 32px 36px;
+  border: 2px solid var(--theme-color);
+  border-radius: 16px;
+  background: rgba(10, 15, 12, 0.55);
+  backdrop-filter: blur(2px);
+  box-shadow: 0 0 24px var(--theme-glow), 0 0 60px var(--theme-glow) inset;
+  text-align: center;
+  color: #d8ffd8;
+}
+
+.verdict-card.theme-high { --theme-color: var(--high-risk-color); --theme-glow: var(--high-risk-glow); }
+.verdict-card.theme-suspicious { --theme-color: var(--suspicious-color); --theme-glow: var(--suspicious-glow); }
+.verdict-card.theme-safe { --theme-color: var(--safe-color); --theme-glow: var(--safe-glow); }
+
+.verdict-icon {
+  width: 70px;
+  height: 70px;
+  margin: 0 auto 8px;
+  color: var(--theme-color);
+}
+
+.verdict-icon svg { width: 100%; height: 100%; display: block; }
+
+.verdict-score {
+  position: absolute;
+  top: 24px;
+  right: 28px;
+  border: 1px solid var(--theme-color);
+  color: var(--theme-color);
+  font-size: 0.75rem;
+  font-weight: bold;
+  padding: 4px 10px;
+  border-radius: 4px;
+  letter-spacing: 0.05em;
+}
+
+.verdict-label {
+  font-size: clamp(1.4rem, 4vw, 2.2rem);
+  font-weight: bold;
+  color: var(--theme-color);
+  text-shadow: 0 0 10px var(--theme-glow);
+  margin-bottom: 18px;
+}
+
+.verdict-details {
+  display: flex;
+  gap: 28px;
+  text-align: left;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.verdict-col { flex: 1 1 220px; min-width: 200px; }
+
+.verdict-col h3 {
+  color: var(--theme-color);
+  font-size: 0.95rem;
+  letter-spacing: 0.04em;
+  margin: 0 0 8px;
+  border-bottom: 1px solid rgba(255,255,255,0.15);
+  padding-bottom: 6px;
+}
+
+.verdict-col ul {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 0.85rem;
+  line-height: 1.5;
+  color: #d8ffd8;
+}
+
+.verdict-details.hidden { display: none; }
+
+.scan-again-btn {
+  margin-top: 26px;
+  background: transparent;
+  border: 1px solid var(--theme-color);
+  color: var(--theme-color);
+  padding: 8px 22px;
+  font-family: inherit;
+  font-weight: bold;
+  letter-spacing: 0.08em;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.scan-again-btn:hover { background: var(--theme-color); color: #000; }
+
+/* --------------------------------------------------------------------------
+   Glitch keyframes (applied via JS-toggled classes for precise timing control)
+   -------------------------------------------------------------------------- */
+@keyframes glitch-jitter {
+  0%   { transform: translate(0,0); opacity: 1; }
+  20%  { transform: translate(-2px, 1px); opacity: 0.85; }
+  40%  { transform: translate(2px, -1px); opacity: 1; }
+  60%  { transform: translate(-1px, 0); opacity: 0.7; }
+  80%  { transform: translate(1px, 1px); opacity: 1; }
+  100% { transform: translate(0,0); opacity: 1; }
+}
+
+.intro-box.glitching {
+  animation: glitch-jitter 0.18s infinite;
+}
+
+.intro-box.glitch-out {
+  animation: none;
+  opacity: 0;
+  transform: scale(1.05);
+  filter: blur(3px);
+  transition: opacity 0.12s, transform 0.12s, filter 0.12s;
+}
+
+@media (max-width: 480px) {
+  .verdict-details { gap: 16px; }
+}
