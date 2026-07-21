@@ -18,7 +18,11 @@ app = FastAPI(
 # --- CORS: allows the webapp (served on a different local port) to call this API ---
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],      # fine for local dev; tighten to your real domain(s) before deploying
+    allow_origins=[
+        "https://thinkbeforeclick-frontend.onrender.com",
+        "http://127.0.0.1:5500",   # keep this so local testing still works
+        "http://localhost:5500",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
