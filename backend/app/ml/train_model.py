@@ -18,8 +18,9 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import classification_report, confusion_matrix, recall_score
 
+
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DATASET_PATH = os.path.join(BASE_DIR, "dataset", "phishing_dataset.csv")
+DATASET_PATH = os.path.join(BASE_DIR, "dataset", "new_data_to_merge.csv")
 MODEL_DIR = os.path.join(BASE_DIR, "model")
 MODEL_PATH = os.path.join(MODEL_DIR, "classifier.joblib")
 VECTORIZER_PATH = os.path.join(MODEL_DIR, "vectorizer.joblib")
