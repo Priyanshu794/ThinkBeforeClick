@@ -121,7 +121,27 @@ SUSPICIOUS_URL_KEYWORDS = [
     # --- Added: delivery/results URL vocabulary ---
     "track", "parcel", "delivery", "shipment", "results",
 ]
-
+def _looks_algorithmically_generated(label: str) -> bool:
+    """
+    Flags domain labels that look randomly generated rather than human-chosen
+    (low vowel ratio or a long consonant run). This is a WEAK, additive signal
+    only (+10, not a hard block) because it has a known false-positive rate on
+    real brands that deliberately drop vowels (flickr, tumblr, etc.) — it's
+    meant to nudge the score, not single-handedly convict a domain.
+    """
+    label = label.lower()
+    if len(label) < 5:
+        return False
+    vowels = sum(1 for c in label if c in "aeiou")
+    vowel_ratio = vowels / len(label)
+    longest_run, current_run = 0, 0
+    for c in label:
+        if c.isalpha() and c not in "aeiou":
+            current_run += 1
+            longest_run = max(longest_run, current_run)
+        else:
+            current_run = 0
+    return vowel_ratio < 0.25 or longest_run >= 5
 
 def analyze_url(url: str) -> Tuple[int, List[str]]:
     """
@@ -147,15 +167,27 @@ def analyze_url(url: str) -> Tuple[int, List[str]]:
             flags.append(f"URL uses a link shortener ({shortener})")
             break
 
-    # Suspicious TLD
+    # Domain extracted once, up front, so both the TLD check and hyphen check
+    # use it consistently (previously the TLD check wrongly tested the whole
+    # URL string instead of just the domain — missed almost every real-world
+    # phishing URL, since those always have a path/query after the domain).
+    domain_part = re.sub(r"^https?://", "", url_lower).split("/")[0]
+
+    # Suspicious TLD (fixed: checks the domain, not the full URL string)
     for tld in SUSPICIOUS_TLDS:
-        if url_lower.rstrip("/").endswith(tld):
+        if domain_part.endswith(tld):
             score += 15
             flags.append(f"Suspicious top-level domain ({tld})")
             break
 
+    # Domain-randomness check (new) — catches algorithmically-generated-looking
+    # domains that dodge keyword/TLD rules entirely (e.g. zszbe.xyz)
+    labels = domain_part.split(".")
+    if any(_looks_algorithmically_generated(l) for l in labels[:-1]):  # skip the TLD label itself
+        score += 10
+        flags.append("Domain label looks algorithmically generated, not human-chosen")
+
     # Excessive hyphens in domain (common phishing pattern: secure-login-bank-verify.com)
-    domain_part = re.sub(r"^https?://", "", url_lower).split("/")[0]
     if domain_part.count("-") >= 2:
         score += 10
         flags.append("Domain contains multiple hyphens (common phishing pattern)")
